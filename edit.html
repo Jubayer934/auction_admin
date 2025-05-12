@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Panel - View & Edit All</title>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-firestore.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h2 { margin-top: 30px; }
+    .section { margin-bottom: 30px; }
+    button { margin-left: 5px; }
+    .status { margin-left: 10px; font-weight: bold; }
+    .value { margin-left: 10px; font-style: italic; color: gray; }
+  </style>
+
+  <script>
+    // Firebase Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyDFRn4zd8ITDKZV_ad5RBeQd-AbQXvouck",
+      authDomain: "teamauction-bb3da.firebaseapp.com",
+      databaseURL: "https://teamauction-bb3da-default-rtdb.firebaseio.com",
+      projectId: "teamauction-bb3da",
+      storageBucket: "teamauction-bb3da.appspot.com",
+      messagingSenderId: "716965484023",
+      appId: "1:716965484023:web:1010d6193da13d1780caf2",
+      measurementId: "G-GEWXSLBDN5"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    function loadAllData() {
+      loadTeams();
+      loadCategories();
+      loadPlayers();
+    }
+
+    function loadTeams() {
+      const container = document.getElementById("teams");
+      container.innerHTML = "<h2>Teams</h2>";
+
+      db.collection("teams").get().then(snapshot => {
+        snapshot.forEach(doc => {
+          const d = doc.data();
+          container.innerHTML += `<p>
+            ${d.name} - Credit: ${d.credit ?? 0}
+            <button onclick="editTeam('${doc.id}', '${d.name}', ${d.credit ?? 0})">Edit</button>
+            <button onclick="deleteItem('teams', '${doc.id}', loadTeams)">Delete</button>
+          </p>`;
+        });
+      });
+    }
+
+    function editTeam(id, currentName, currentCredit) {
+      const newName = prompt("New team name:", currentName);
+      const newCredit = parseInt(prompt("New credit:", currentCredit));
+      if (!newName || isNaN(newCredit)) return alert("Invalid input");
+      db.collection("teams").doc(id).update({ name: newName, credit: newCredit }).then(loadTeams);
+    }
+
+    function loadCategories() {
+      const container = document.getElementById("categories");
+      container.innerHTML = "<h2>Categories</h2>";
+
+      db.collection("categories").get().then(snapshot => {
+        snapshot.forEach(doc => {
+          const d = doc.data();
+          container.innerHTML += `<p>${d.category} (${d.value}) 
+            <button onclick="editCategory('${doc.id}', '${d.category}', '${d.value}')">Edit</button>
+            <button onclick="deleteItem('categories', '${doc.id}', loadCategories)">Delete</button>
+          </p>`;
+        });
+      });
+    }
+
+    function editCategory(id, oldCategory, oldValue) {
+      const newValue = prompt(`New value for ${oldCategory}:`, oldValue);
+      if (!newValue) return;
+      db.collection("categories").doc(id).update({ value: newValue }).then(loadCategories);
+    }
+
+function loadPlayers() {
+  const container = document.getElementById("players");
+  container.innerHTML = "<h2>Players</h2>";
+
+  db.collection("players").get().then(snapshot => {
+    const grouped = {};
+    let totalPlayers = 0;
+
+    snapshot.forEach(doc => {
+      const d = doc.data();
+      totalPlayers++;
+      if (!grouped[d.category]) {
+        grouped[d.category] = [];
+      }
+      grouped[d.category].push({ id: doc.id, data: d });
+    });
+
+    container.innerHTML += `<p><strong>Total Players:</strong> ${totalPlayers}</p>`;
+
+    for (const category in grouped) {
+      container.innerHTML += `<h3>${category}</h3><ul>`;
+      grouped[category].forEach(player => {
+        const playerId = player.id;
+        const playerData = player.data;
+        let playerInfo = `<strong style="text-decoration: underline;">${playerData.name}</strong><br/>`;
+
+        for (const key in playerData) {
+          const value = playerData[key];
+          // Skip name and status fields since we show name above and status has its own button
+          if (key === "name" || key === "category") continue;
+
+          playerInfo += `
+            <div>
+              <label><strong>${key}:</strong></label>
+              <input type="text" id="input-${playerId}-${key}" value="${value}" style="width: 150px; margin-left: 5px;" />
+            </div>
+          `;
+        }
+
+        container.innerHTML += `
+          <li style="margin-bottom: 15px;">
+            ${playerInfo}
+            <button onclick="savePlayerChanges('${playerId}')">Save</button>
+            <button onclick="changePlayerStatus('${playerId}', '${playerData.status || 'available'}')">Change Status</button>
+            <button onclick="deleteItem('players', '${playerId}', loadPlayers)">Delete</button>
+          </li>
+        `;
+      });
+      container.innerHTML += `</ul>`;
+    }
+  });
+}
+
+
+    function changePlayerStatus(playerId, currentStatus) {
+      // Toggle between 'Available', 'Unsold', and 'Signed'
+      let newStatus;
+      if (currentStatus === 'available') {
+        newStatus = 'unsold';
+      } else if (currentStatus === 'unsold') {
+        newStatus = 'signed';
+      } else {
+        newStatus = 'available';
+      }
+
+      db.collection("players").doc(playerId).update({ status: newStatus }).then(loadPlayers);
+    }
+
+    function deleteItem(collection, id, callback) {
+      if (confirm("Are you sure?")) {
+        db.collection(collection).doc(id).delete().then(callback);
+      }
+    }
+
+    window.onload = loadAllData;
+  </script>
+</head>
+<body>
+  <h1>Admin Panel: View & Edit Everything</h1>
+
+  <div id="teams" class="section"></div>
+  <div id="categories" class="section"></div>
+  <div id="players" class="section"></div>
+</body>
+</html>

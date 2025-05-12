@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin - Teams and Categories</title>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-firestore.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    input, button { margin: 5px; }
+    div.section { margin-bottom: 30px; }
+    h2 { margin-top: 20px; }
+  </style>
+
+  <script>
+    // Firebase Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyDFRn4zd8ITDKZV_ad5RBeQd-AbQXvouck",
+      authDomain: "teamauction-bb3da.firebaseapp.com",
+      databaseURL: "https://teamauction-bb3da-default-rtdb.firebaseio.com",
+      projectId: "teamauction-bb3da",
+      storageBucket: "teamauction-bb3da.appspot.com",
+      messagingSenderId: "716965484023",
+      appId: "1:716965484023:web:1010d6193da13d1780caf2",
+      measurementId: "G-GEWXSLBDN5"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // ========================
+    // TEAM & CATEGORY SECTION
+    // ========================
+    function generateTeams() {
+      const teamCount = parseInt(document.getElementById("teamCount").value);
+      const container = document.getElementById("teamInputs");
+      container.innerHTML = "";
+      for (let i = 1; i <= teamCount; i++) {
+        container.innerHTML += `<input type="text" id="teamName${i}" placeholder="Team ${i} Name" required><br>`;
+      }
+      document.getElementById("generateCategoriesBtn").style.display = "inline-block";
+    }
+
+    function generateCategories() {
+      const categoryCount = parseInt(document.getElementById("categoryCount").value);
+      const container = document.getElementById("categoryInputs");
+      container.innerHTML = "";
+      for (let i = 1; i <= categoryCount; i++) {
+        container.innerHTML += `<input type="number" id="categoryValue${i}" placeholder="Category ${i} Value" required><br>`;
+      }
+      document.getElementById("submitBtn").style.display = "inline-block";
+    }
+
+    function submitData() {
+      const teamCount = parseInt(document.getElementById("teamCount").value);
+      const categoryCount = parseInt(document.getElementById("categoryCount").value);
+      const teamPromises = [];
+      for (let i = 1; i <= teamCount; i++) {
+        const name = document.getElementById(`teamName${i}`).value.trim();
+        if (!name) return alert(`Team ${i} name missing`);
+        teamPromises.push(db.collection("teams").add({ name }));
+      }
+      Promise.all(teamPromises).then(() => {
+        const categoryPromises = [];
+        for (let i = 1; i <= categoryCount; i++) {
+          const value = document.getElementById(`categoryValue${i}`).value.trim();
+          if (!value) return alert(`Category ${i} value missing`);
+          categoryPromises.push(db.collection("categories").add({
+            category: `Category ${i}`,
+            value
+          }));
+        }
+        return Promise.all(categoryPromises);
+      }).then(() => {
+        alert("Teams and Categories added!");
+        loadTeamsAndCategories();
+      }).catch(err => alert("Error: " + err.message));
+    }
+
+    function loadTeamsAndCategories() {
+      const teamList = document.getElementById("teamList");
+      const categoryList = document.getElementById("categoryList");
+      teamList.innerHTML = "<h2>Teams</h2>";
+      categoryList.innerHTML = "<h2>Categories</h2>";
+
+      db.collection("teams").get().then(snapshot => {
+  snapshot.forEach(doc => {
+    const data = doc.data();
+    teamList.innerHTML += `<p>${data.name} - Credit: ${data.credit ?? 0}
+      <button onclick="editTeam('${doc.id}')">Edit</button>
+      <button onclick="deleteTeam('${doc.id}')">Delete</button></p>`;
+  });
+});
+
+
+      db.collection("categories").get().then(snapshot => {
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          categoryList.innerHTML += `<p>${data.category}: ${data.value}
+            <button onclick="editCategory('${doc.id}')">Edit</button>
+            <button onclick="deleteCategory('${doc.id}')">Delete</button></p>`;
+        });
+      });
+    }
+
+    function editTeam(id) {
+      const newName = prompt("New team name:");
+      if (newName) {
+        db.collection("teams").doc(id).update({ name: newName }).then(loadTeamsAndCategories);
+      }
+    }
+
+    function deleteTeam(id) {
+      if (confirm("Delete this team?")) {
+        db.collection("teams").doc(id).delete().then(loadTeamsAndCategories);
+      }
+    }
+
+    function editCategory(id) {
+      const newValue = prompt("New category value:");
+      if (newValue) {
+        db.collection("categories").doc(id).update({ value: newValue }).then(loadTeamsAndCategories);
+      }
+    }
+
+    function deleteCategory(id) {
+      if (confirm("Delete this category?")) {
+        db.collection("categories").doc(id).delete().then(loadTeamsAndCategories);
+      }
+    }
+
+    // ========================
+    // PLAYER SECTION
+    // ========================
+    let playerCategoryDistribution = [];
+
+    function generatePlayerCategoryInputs() {
+      const total = parseInt(document.getElementById("totalPlayers").value);
+      const categoryCount = parseInt(document.getElementById("categoryCount").value);
+      if (!total || !categoryCount) return alert("Enter total players and categories first.");
+
+      playerCategoryDistribution = [];
+      const container = document.getElementById("playerCategoryInputs");
+      container.innerHTML = "";
+
+      for (let i = 1; i <= categoryCount; i++) {
+        container.innerHTML += `<label>Players in Category ${i}:</label>
+          <input type="number" id="categoryPlayerCount${i}" min="0" required><br>`;
+      }
+
+      document.getElementById("generatePlayerFieldsBtn").style.display = "inline-block";
+    }
+
+    function generatePlayerFields() {
+      const categoryCount = parseInt(document.getElementById("categoryCount").value);
+      const container = document.getElementById("playerInputs");
+      container.innerHTML = "";
+
+      let totalEntered = 0;
+      for (let i = 1; i <= categoryCount; i++) {
+        const count = parseInt(document.getElementById(`categoryPlayerCount${i}`).value);
+        if (isNaN(count)) return alert(`Invalid count in Category ${i}`);
+        playerCategoryDistribution[i - 1] = count;
+        totalEntered += count;
+      }
+
+      const expectedTotal = parseInt(document.getElementById("totalPlayers").value);
+      if (totalEntered !== expectedTotal) return alert(`Expected ${expectedTotal} but got ${totalEntered}`);
+
+      for (let i = 0; i < categoryCount; i++) {
+        container.innerHTML += `<h4>Category ${i + 1}</h4>`;
+        for (let j = 0; j < playerCategoryDistribution[i]; j++) {
+container.innerHTML += `
+  <input type="text" id="player_category${i}_index${j}" placeholder="Player ${j + 1} Name" required>
+  <input type="text" id="position_category${i}_index${j}" placeholder="Position" required><br>`;
+        }
+      }
+
+      document.getElementById("submitPlayersBtn").style.display = "inline-block";
+    }
+
+    function submitPlayers() {
+  const players = [];
+  for (let i = 0; i < playerCategoryDistribution.length; i++) {
+    for (let j = 0; j < playerCategoryDistribution[i]; j++) {
+      const input = document.getElementById(`player_category${i}_index${j}`);
+      const name = input.value.trim();
+if (!name) return alert(`Missing name in Category ${i + 1}, Player ${j + 1}`);
+
+const positionInput = document.getElementById(`position_category${i}_index${j}`);
+const position = positionInput.value.trim();
+if (!position) return alert(`Missing position in Category ${i + 1}, Player ${j + 1}`);
+
+const categoryValue = document.getElementById(`categoryValue${i + 1}`).value.trim();
+
+players.push({ 
+  name, 
+  category: `Category ${i + 1}`, 
+  status: "available", 
+  value: categoryValue,
+  position
+});
+
+    }
+  }
+
+  const promises = players.map(p => db.collection("players").add(p));
+  Promise.all(promises).then(() => {
+    alert("Players added!");
+    loadPlayers();
+    displayPlayersGroupedByCategory(players);
+  }).catch(err => alert("Error: " + err.message));
+}
+
+
+    function loadPlayers() {
+  const container = document.getElementById("playerList");
+  container.innerHTML = "<h2>Players</h2>";
+
+  db.collection("players").get().then(snapshot => {
+    snapshot.forEach(doc => {
+      const p = doc.data();
+container.innerHTML += `<p>${p.name} (${p.category}) - Position: ${p.position ?? 'N/A'} - Status: ${p.status} - Value: ${p.value}
+        <button onclick="editPlayer('${doc.id}', '${p.name}')">Edit</button>
+        <button onclick="deletePlayer('${doc.id}')">Delete</button></p>`;
+    });
+  });
+}
+
+
+    function editPlayer(id, oldName) {
+      const newName = prompt("New player name:", oldName);
+      if (newName) {
+        db.collection("players").doc(id).update({ name: newName }).then(loadPlayers);
+      }
+    }
+
+    function deletePlayer(id) {
+      if (confirm("Delete this player?")) {
+        db.collection("players").doc(id).delete().then(loadPlayers);
+      }
+    }
+
+    function displayPlayersGroupedByCategory(players) {
+  const groupedPlayers = {};
+
+  players.forEach(player => {
+    if (!groupedPlayers[player.category]) {
+      groupedPlayers[player.category] = [];
+    }
+    groupedPlayers[player.category].push(player.name);
+  });
+
+  const groupedContainer = document.getElementById("groupedPlayerList");
+  groupedContainer.innerHTML = "<h2>Players Grouped by Category</h2>";
+
+  Object.keys(groupedPlayers).forEach(category => {
+    groupedContainer.innerHTML += `<h3>${category}</h3><ul>`;
+    groupedPlayers[category].forEach(player => {
+      groupedContainer.innerHTML += `<li>${player}</li>`;
+    });
+    groupedContainer.innerHTML += `</ul>`;
+  });
+}
+function editPlayerStatus(id) {
+  const newStatus = prompt("Enter new status for the player (e.g., available, sold):");
+  if (newStatus) {
+    db.collection("players").doc(id).update({ status: newStatus }).then(loadPlayers);
+  }
+}
+
+
+  function assignCreditToTeams() {
+  const credit = parseInt(prompt("Enter credit value for all teams:"));
+  if (isNaN(credit)) return alert("Invalid credit value");
+
+  db.collection("teams").get().then(snapshot => {
+    const promises = [];
+    snapshot.forEach(doc => {
+      promises.push(doc.ref.update({ credit }));
+    });
+    return Promise.all(promises);
+  }).then(() => {
+    alert("Credits assigned to all teams!");
+    loadTeamsAndCategories(); // Refresh the display
+  }).catch(err => alert("Error: " + err.message));
+}
+
+
+    window.onload = () => {
+      loadTeamsAndCategories();
+      loadPlayers();
+    };
+  </script>
+</head>
+<body>
+  <h1>Admin Page</h1>
+
+  <div class="section">
+    <h3>Teams & Categories</h3>
+    <input type="number" id="teamCount" placeholder="Number of Teams">
+    <button onclick="generateTeams()">Generate Teams</button>
+    <div id="teamInputs"></div>
+
+    <input type="number" id="categoryCount" placeholder="Number of Categories">
+    <button id="generateCategoriesBtn" onclick="generateCategories()" style="display:none;">Generate Categories</button>
+    <div id="categoryInputs"></div>
+
+
+
+    <button id="submitBtn" onclick="submitData()" style="display:none;">Submit Teams and Categories</button>
+
+    <div id="teamList"></div>
+    <div id="categoryList"></div>
+  </div>
+
+    <button onclick="assignCreditToTeams()">Assign Credit to All Teams</button>
+
+
+  <div class="section">
+    <h3>Player Setup</h3>
+    <input type="number" id="totalPlayers" placeholder="Total Players">
+    <button onclick="generatePlayerCategoryInputs()">Setup Player Categories</button>
+    <div id="playerCategoryInputs"></div>
+    <button id="generatePlayerFieldsBtn" onclick="generatePlayerFields()" style="display:none;">Generate Player Fields</button>
+    <div id="playerInputs"></div>
+    <button id="submitPlayersBtn" onclick="submitPlayers()" style="display:none;">Submit Players</button>
+    <div id="playerList"></div>
+  </div>
+
+  <div id="groupedPlayerList"></div>
+</body>
+</html>
