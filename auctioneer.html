@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Auctioneer Panel</title>
+  <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-firestore.js"></script>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    button { padding: 10px; margin-top: 10px; }
+    #playerInfo { margin-top: 20px; font-size: 18px; }
+    #spinBtn[disabled] { background: gray; }
+    #historyList {
+      max-height: 300px; 
+      overflow-y: auto; 
+      border: 1px solid #ccc; 
+      padding: 10px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Auctioneer Panel</h1>
+
+  <div><strong>Total Players:</strong> <span id="totalPlayers">Loading...</span></div>
+  <button id="spinBtn" onclick="spinPlayer()">🎯 Spin (10s)</button>
+  <audio id="spinSound" src="https://www.soundjay.com/button/beep-07.wav" preload="auto"></audio>
+
+  <div id="playerInfo"></div>
+
+  <div id="decisionSection" style="display: none;">
+    <h3>Sell Player</h3>
+    <label>Sale Price: <input type="number" id="salePrice" /></label><br>
+    <label>Select Team:
+      <select id="teamSelect"></select>
+    </label><br>
+    <button onclick="sign()">Sign</button>
+    <button onclick="markUnsold()">Unsold</button>
+  </div>
+
+  <h2>Auction History (Recent)</h2>
+  <div id="historyList"></div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDFRn4zd8ITDKZV_ad5RBeQd-AbQXvouck",
+      authDomain: "teamauction-bb3da.firebaseapp.com",
+      projectId: "teamauction-bb3da"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let currentPlayer = null;
+
+    async function countTotalPlayers() {
+      const snap = await db.collection("players").get();
+      document.getElementById("totalPlayers").innerText = snap.size;
+    }
+
+    async function spinPlayer() {
+      document.getElementById("spinBtn").disabled = true;
+      document.getElementById("spinSound").play();
+
+      document.getElementById("playerInfo").innerText = "Spinning...";
+      document.getElementById("decisionSection").style.display = "none";
+
+      const available = await db.collection("players").where("status", "==", "available").get();
+
+      if (available.empty) {
+  // Store "NO" in every field in currentSpinPlayer
+  await db.collection("currentSpinPlayer").doc("currentPlayer").set({
+    name: "NO",
+    category: "NO",
+    value: "NO",
+    position: "NO",
+    status: "NO",
+    team: "NO",
+    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  document.getElementById("playerInfo").innerText = "No available players.";
+  document.getElementById("spinBtn").disabled = false;
+  return;
+}
+
+
+      const players = available.docs;
+      const randomIndex = Math.floor(Math.random() * players.length);
+      const playerDoc = players[randomIndex];
+      currentPlayer = { id: playerDoc.id, ...playerDoc.data() };
+
+      // Replace the current player in the currentSpinPlayer collection
+      await savePlayerToCurrentSpin(currentPlayer);
+
+      setTimeout(() => {
+        showPlayerDetails();
+      }, 10000);
+    }
+
+    // Function to save or replace the current player in the currentSpinPlayer collection
+    async function savePlayerToCurrentSpin(player) {
+      try {
+        // Replace the existing player (overwrite the currentSpinPlayer document)
+        await db.collection("currentSpinPlayer").doc("currentPlayer").set({
+          name: player.name,
+          category: player.category,
+          value: player.value,
+          position: player.position || "N/A",  // Default to "N/A" if no position is set
+          status: player.status,
+          team: player.team || "None", // Default to "None" if no team assigned
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()  // Timestamp of when the player was spun
+        });
+        console.log("Current player replaced in currentSpinPlayer collection.");
+      } catch (error) {
+        console.error("Error replacing player in currentSpinPlayer:", error);
+      }
+    }
+
+    async function showPlayerDetails() {
+      document.getElementById("playerInfo").innerHTML = ` 
+        <strong>Name:</strong> ${currentPlayer.name}<br>
+        <strong>Category:</strong> ${currentPlayer.category}<br>
+        <strong>Position:</strong> ${currentPlayer.position || "N/A"}<br>
+        <strong>Base Value:</strong> ${currentPlayer.value}
+      `;
+
+      const teamSelect = document.getElementById("teamSelect");
+      teamSelect.innerHTML = "";
+      const teams = await db.collection("teams").get();
+      teams.forEach(doc => {
+        const t = doc.data();
+        teamSelect.innerHTML += `<option value="${doc.id}">${t.name} (Credits: ${t.credit})</option>`;
+      });
+
+      document.getElementById("salePrice").value = currentPlayer.value;
+      document.getElementById("decisionSection").style.display = "block";
+    }
+
+    function logAuction(playerName, status, teamName = null, value = null) {
+      db.collection("auctionHistory").add({
+        player: playerName,
+        status: status,
+        team: teamName,
+        value: value,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    function loadAuctionHistory() {
+      const historyDiv = document.getElementById("historyList");
+      historyDiv.innerHTML = "Loading...";
+
+      db.collection("auctionHistory")
+        .orderBy("timestamp", "desc")
+        .limit(20)
+        .onSnapshot(snapshot => {
+          historyDiv.innerHTML = "";
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            const time = data.timestamp?.toDate().toLocaleString() || "Just now";
+            const item = document.createElement("div");
+            item.style.marginBottom = "8px";
+            item.innerHTML = `<strong>${data.player}</strong> - ${data.status.toUpperCase()} ${data.team ? `→ ${data.team}` : ''} (${data.value || "N/A"}) <br><small>${time}</small>`;
+            historyDiv.appendChild(item);
+          });
+        });
+    }
+
+    async function sign() {
+      if (!currentPlayer) {
+        alert("No player selected.");
+        return;
+      }
+
+      const teamId = document.getElementById("teamSelect").value;
+      const salePrice = parseInt(document.getElementById("salePrice").value);
+
+      if (!teamId) {
+        alert("Please select a team.");
+        return;
+      }
+
+      if (isNaN(salePrice) || salePrice <= 0) {
+        alert("Please enter a valid sale price.");
+        return;
+      }
+
+      try {
+        const teamRef = db.collection("teams").doc(teamId);
+        const teamDoc = await teamRef.get();
+
+        if (!teamDoc.exists) {
+          alert("Selected team not found.");
+          return;
+        }
+
+        const teamData = teamDoc.data();
+
+        if (teamData.credit < salePrice) {
+          alert("Insufficient credit!");
+          return;
+        }
+
+        // Update player status
+        await db.collection("players").doc(currentPlayer.id).update({
+          status: "signed",
+          team: teamData.name,
+          value: salePrice
+        });
+
+        // Deduct credit from the team
+        await teamRef.update({
+          credit: teamData.credit - salePrice
+        });
+
+        alert(`Player ${currentPlayer.name} signed by ${teamData.name} for ${salePrice} credits.`);
+        
+        // Log in auction history
+        logAuction(currentPlayer.name, "signed", teamData.name, salePrice);
+
+        // Reset UI and player
+        resetSpin();
+      } catch (error) {
+        console.error("Error during sign process:", error);
+        alert("An error occurred during the sign process. Check console for details.");
+      }
+    }
+
+    async function markUnsold() {
+      await db.collection("players").doc(currentPlayer.id).update({
+        status: "unsold"
+      });
+
+      alert(`Player ${currentPlayer.name} marked as unsold.`);
+      logAuction(currentPlayer.name, "unsold");
+      resetSpin();
+    }
+
+    function resetSpin() {
+      currentPlayer = null;
+      document.getElementById("playerInfo").innerHTML = "";
+      document.getElementById("decisionSection").style.display = "none";
+      document.getElementById("spinBtn").disabled = false;
+      countTotalPlayers(); // Update count
+    }
+
+    countTotalPlayers();
+    loadAuctionHistory(); // Make sure history is always loaded
+  </script>
+</body>
+</html>

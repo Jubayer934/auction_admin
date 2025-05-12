@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>History Admin Panel</title>
+  <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-firestore.js"></script>
+  <style>
+    
+    body { font-family: Arial; padding: 20px; }
+    button { padding: 10px; margin-top: 10px; }
+    #editHistoryList {
+      max-height: 300px; 
+      overflow-y: auto; 
+      border: 1px solid #ccc; 
+      padding: 10px;
+      margin-top: 20px;
+    }
+    input, select {
+      width: 200px;
+      margin-bottom: 5px;
+    }
+    div { margin-bottom: 15px; }
+  </style>
+</head>
+<body>
+  <h1>History Admin Panel</h1>
+  <h2>Add New Auction History</h2>
+<div>
+  <strong>Player Name:</strong>
+  <input type="text" id="newPlayer" /><br>
+  
+  <strong>Status:</strong>
+  <select id="newStatus">
+    <option value="signed">Signed</option>
+    <option value="unsold">Unsold</option>
+  </select><br>
+  
+  <strong>Team:</strong>
+  <input type="text" id="newTeam" /><br>
+  
+  <strong>Value:</strong>
+  <input type="number" id="newValue" /><br>
+  
+  <button onclick="addNewHistory()">Add History</button>
+</div>
+
+
+  <h2>Edit Auction History</h2>
+  <div id="editHistoryList">Loading...</div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDFRn4zd8ITDKZV_ad5RBeQd-AbQXvouck",
+      authDomain: "teamauction-bb3da.firebaseapp.com",
+      projectId: "teamauction-bb3da"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // Function to load editable auction history
+    function loadEditableAuctionHistory() {
+      const editDiv = document.getElementById("editHistoryList");
+      editDiv.innerHTML = "Loading...";
+
+      db.collection("auctionHistory")
+        .orderBy("timestamp", "desc")
+        .limit(20)
+        .onSnapshot(snapshot => {
+          editDiv.innerHTML = "";
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            const item = document.createElement("div");
+            item.style.marginBottom = "12px";
+
+            item.innerHTML = `
+              <div style="border: 1px solid #ccc; padding: 10px;">
+                <strong>Player:</strong> <input value="${data.player}" id="player-${doc.id}" /><br>
+                <strong>Status:</strong>
+                  <select id="status-${doc.id}">
+                    <option value="signed" ${data.status === "signed" ? "selected" : ""}>Signed</option>
+                    <option value="unsold" ${data.status === "unsold" ? "selected" : ""}>Unsold</option>
+                  </select><br>
+                <strong>Team:</strong> <input value="${data.team || ""}" id="team-${doc.id}" /><br>
+                <strong>Value:</strong> <input type="number" value="${data.value || ""}" id="value-${doc.id}" /><br>
+                <button onclick="updateHistory('${doc.id}')">Update</button>
+              </div>
+            `;
+            editDiv.appendChild(item);
+          });
+        });
+    }
+
+    // Function to update the auction history
+    function updateHistory(id) {
+      const player = document.getElementById(`player-${id}`).value;
+      const status = document.getElementById(`status-${id}`).value;
+      const team = document.getElementById(`team-${id}`).value;
+      const value = parseInt(document.getElementById(`value-${id}`).value);
+
+      if (!player || !status) {
+        alert("Player and status are required.");
+        return;
+      }
+
+      db.collection("auctionHistory").doc(id).update({
+        player,
+        status,
+        team,
+        value: isNaN(value) ? null : value
+      }).then(() => {
+        alert("Auction history updated.");
+      }).catch(err => {
+        console.error("Update failed:", err);
+        alert("Failed to update. Check console.");
+      });
+    }
+
+    // Function to add new auction history
+function addNewHistory() {
+  const player = document.getElementById("newPlayer").value;
+  const status = document.getElementById("newStatus").value;
+  const team = document.getElementById("newTeam").value;
+  const value = parseInt(document.getElementById("newValue").value);
+
+  // Basic validation
+  if (!player || !status || !team || isNaN(value) || value <= 0) {
+    alert("Please fill all fields correctly.");
+    return;
+  }
+
+  // Add to Firestore
+  db.collection("auctionHistory").add({
+    player,
+    status,
+    team,
+    value: isNaN(value) ? null : value,
+    timestamp: firebase.firestore.FieldValue.serverTimestamp()  // Automatically set the timestamp
+  }).then(() => {
+    alert("New auction history added!");
+    loadEditableAuctionHistory();  // Reload the history list after adding
+    clearAddHistoryForm();  // Clear the form fields
+  }).catch(err => {
+    console.error("Error adding history:", err);
+    alert("Failed to add new auction history.");
+  });
+}
+
+// Function to clear the add new history form
+function clearAddHistoryForm() {
+  document.getElementById("newPlayer").value = "";
+  document.getElementById("newStatus").value = "signed";
+  document.getElementById("newTeam").value = "";
+  document.getElementById("newValue").value = "";
+}
+
+
+    // Load the editable auction history when the page loads
+    loadEditableAuctionHistory();
+  </script>
+</body>
+</html>
