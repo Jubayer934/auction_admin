@@ -84,12 +84,27 @@
                 <strong>Team:</strong> <input value="${data.team || ""}" id="team-${doc.id}" /><br>
                 <strong>Value:</strong> <input type="number" value="${data.value || ""}" id="value-${doc.id}" /><br>
                 <button onclick="updateHistory('${doc.id}')">Update</button>
+<button onclick="deleteHistory('${doc.id}')">Delete</button>
+
               </div>
             `;
             editDiv.appendChild(item);
           });
         });
     }
+    // Function to delete auction history
+function deleteHistory(id) {
+  if (confirm("Are you sure you want to delete this history entry?")) {
+    db.collection("auctionHistory").doc(id).delete()
+      .then(() => {
+        alert("Auction history deleted.");
+      })
+      .catch(err => {
+        console.error("Delete failed:", err);
+        alert("Failed to delete. Check console.");
+      });
+  }
+}
 
     // Function to update the auction history
     function updateHistory(id) {
