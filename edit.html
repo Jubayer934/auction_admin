@@ -137,19 +137,12 @@ function loadPlayers() {
 }
 
 
-    function changePlayerStatus(playerId, currentStatus) {
-      // Toggle between 'Available', 'Unsold', and 'Signed'
-      let newStatus;
-      if (currentStatus === 'available') {
-        newStatus = 'unsold';
-      } else if (currentStatus === 'unsold') {
-        newStatus = 'signed';
-      } else {
-        newStatus = 'available';
-      }
+function changePlayerStatus(playerId, currentStatus) {
+  // Toggle between 'available' and 'unsold' only
+  let newStatus = currentStatus === 'available' ? 'unsold' : 'available';
+  db.collection("players").doc(playerId).update({ status: newStatus }).then(loadPlayers);
+}
 
-      db.collection("players").doc(playerId).update({ status: newStatus }).then(loadPlayers);
-    }
 
     function deleteItem(collection, id, callback) {
       if (confirm("Are you sure?")) {
