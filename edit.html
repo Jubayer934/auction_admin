@@ -164,6 +164,42 @@ function changePlayerStatus(playerId, currentStatus) {
   let newStatus = currentStatus === 'available' ? 'unsold' : 'available';
   db.collection("players").doc(playerId).update({ status: newStatus }).then(loadPlayers);
 }
+function addTeam() {
+  const name = prompt("Team name:");
+  const credit = parseInt(prompt("Credit:"));
+  if (!name || isNaN(credit)) return alert("Invalid input");
+  db.collection("teams").add({ name, credit }).then(loadTeams);
+}
+function addCategory() {
+  const category = prompt("Enter category name:");
+  const value = prompt("Enter value for this category:");
+  if (!category || !value) return alert("Invalid input");
+  db.collection("categories").add({ category, value }).then(loadCategories);
+}
+function addPlayer() {
+  const name = prompt("Enter player name:");
+  const category = prompt("Enter category:");
+  const position = prompt("Enter player position:");
+  const status = prompt("Enter status (optional):", "available");
+  const value = parseFloat(prompt("Enter player value:"));
+  const team = prompt("Enter team name (optional):", "");
+
+  if (!name || !category || !position || isNaN(value)) {
+    return alert("Invalid input. Name, category, position, and value are required.");
+  }
+
+  const playerData = {
+    name,
+    category,
+    position,
+    value,
+    status: status || "available",
+    team: team || ""
+  };
+
+  db.collection("players").add(playerData).then(loadPlayers);
+}
+
 
 
     function deleteItem(collection, id, callback) {
@@ -177,9 +213,11 @@ function changePlayerStatus(playerId, currentStatus) {
 </head>
 <body>
   <h1>Admin Panel: View & Edit Everything</h1>
-
+  <button onclick="addTeam()">Add Team</button>
   <div id="teams" class="section"></div>
+  <button onclick="addCategory()">Add Category</button>
   <div id="categories" class="section"></div>
+  <button onclick="addPlayer()">Add Player</button>
   <div id="players" class="section"></div>
 </body>
 </html>
