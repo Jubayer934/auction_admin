@@ -77,6 +77,28 @@
       });
     }
 
+
+  function savePlayerChanges(playerId) {
+  const playerRef = db.collection("players").doc(playerId);
+  playerRef.get().then(doc => {
+    if (!doc.exists) return alert("Player not found");
+    const data = doc.data();
+    const updatedData = {};
+
+    for (const key in data) {
+      if (key === "name" || key === "category") continue;
+      const input = document.getElementById(`input-${playerId}-${key}`);
+      if (input) {
+        updatedData[key] = input.value;
+      }
+    }
+
+    playerRef.update(updatedData).then(() => {
+      alert("Player updated successfully");
+    });
+  });
+}
+
     function editCategory(id, oldCategory, oldValue) {
       const newValue = prompt(`New value for ${oldCategory}:`, oldValue);
       if (!newValue) return;
